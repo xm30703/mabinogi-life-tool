@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="瑪奇 Mobile 生活跑商、庫存與生產規劃助手">
+  <title>瑪奇 Mobile｜生活跑商與生產助手</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+  <div class="top">
+    <div>
+      <h1>瑪奇 Mobile｜生活跑商與生產助手</h1>
+      <div class="subtitle">Web v1.0｜進度、庫存與生產目標保存在你的瀏覽器</div>
+    </div>
+    <div class="toolbar">
+      <button class="btn" id="exportBtn">匯出資料</button>
+      <label class="btn" style="display:inline-block">匯入資料<input id="importFile" type="file" accept=".json" hidden></label>
+      <button class="btn danger" id="resetBtn">重設每日/每週進度</button>
+    </div>
+  </div>
+
+  <div class="metrics" id="metrics"></div>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="route">跑商總覽</button>
+    <button class="tab" data-tab="prep">出門準備</button>
+    <button class="tab" data-tab="production">生產規劃</button>
+    <button class="tab" data-tab="search">材料查詢</button>
+  </div>
+
+  <div class="filters">
+    <input id="q" placeholder="搜尋 NPC / 材料 / 成品，例如：蘆筍、基利安、暴擊秘藥">
+    <select id="pf">
+      <option value="ALL">全部優先級</option>
+      <option value="S_PLUS">S+ 核心</option>
+      <option value="S">S 重要</option>
+      <option value="A">A 建議</option>
+      <option value="B">B 按需</option>
+    </select>
+  </div>
+
+  <section id="route" class="panel active"></section>
+  <section id="prep" class="panel"></section>
+  <section id="production" class="panel"></section>
+  <section id="search" class="panel"></section>
+</div>
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
