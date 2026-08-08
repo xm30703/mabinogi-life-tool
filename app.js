@@ -209,13 +209,14 @@ function renderRoute(){
                   <div class="badges">${badgeP(t.priority)}<span class="badge">${scheduleLabel(t)}</span></div>
                   <div class="line">${line}</div>
                   ${decision?`<div class="decision">${decision}</div>`:''}
-                  <details><summary>為什麼做？</summary><div class="reason">${t.why}</div></details>
                 </div>
                 <div class="actions">
+                  <button class="info-toggle" type="button" data-info-id="${t.id}" aria-label="查看用途說明" aria-expanded="false" title="用途說明">ⓘ</button>
                   <button class="status ${st==='done'?'active':''}" data-id="${t.id}" data-action="done">完成</button>
                   <button class="status ${st==='skip'?'active':''}" data-id="${t.id}" data-action="skip">跳過</button>
                 </div>
               </div>
+              <div class="reason-panel" id="reason-${t.id}" hidden>${t.why}</div>
             </div>`;
           }).join('')}
         </div>`).join('')}
@@ -226,6 +227,14 @@ function renderRoute(){
 
   $('#dailyModeBtn').addEventListener('click',()=>{state.routeMode='DAILY';saveState();renderAll();});
   $('#weeklyModeBtn').addEventListener('click',()=>{state.routeMode='WEEKLY';saveState();renderAll();});
+  $$('#route .info-toggle').forEach(b=>b.addEventListener('click',()=>{
+    const panel=document.getElementById(`reason-${b.dataset.infoId}`);
+    if(!panel) return;
+    const willOpen=panel.hidden;
+    panel.hidden=!willOpen;
+    b.setAttribute('aria-expanded', String(willOpen));
+    b.classList.toggle('active', willOpen);
+  }));
   $$('#route .status').forEach(b=>b.addEventListener('click',()=>{
     const t=tasks.find(x=>x.id===b.dataset.id);
     if(!t) return;
