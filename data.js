@@ -1,7 +1,7 @@
 // Mabinogi Life Tool - shared game data
 // Edit game/vendor/recipe data here; app.js owns UI/state logic.
 const APP_DATA_SCHEMA_VERSION = 1;
-const DATA_VERSION = 1;
+const DATA_VERSION = 2;
 const PRIORITY_LABEL = {S_PLUS:'S+',S:'S',A:'A',B:'B'};
 const TOWN_ORDER = ['提爾克那','杜加德走廊','杜巴頓','庫漢'];
 const materials = {
@@ -20,6 +20,7 @@ const materials = {
   resin:{name:'樹液',source:'交換'},
   steamedClam:{name:'蒸蛤蜊',source:'料理'},
   musicBox:{name:'特蕾西原木音樂盒',source:'交換'},
+  leather:{name:'皮革',source:'交換／加工'},
   stirVeg:{name:'炒蔬菜',source:'料理'},
   highWood:{name:'高級木材',source:'交換／加工'},
 
@@ -116,7 +117,7 @@ const tasks = [
   {id:'tir-lisa',town:'提爾克那',order:4,npc:'麗莎',type:'barter',priority:'S_PLUS',verified:'TW_CONFIRMED',input:'appleJuice',inputQty:1,output:'catalystHi',outputQty:1,limit:1,why:'高階鍊金／再燃燒路線的稀有核心。'},
 
   {id:'dug-tracy-resin',town:'杜加德走廊',order:1,npc:'特蕾西',type:'barter',priority:'S',verified:'USER_CONFIRMED',input:'highLog',inputQty:5,output:'resin',outputQty:20,limit:5,why:'樹液是高階木材加工的重要瓶頸。'},
-  {id:'dug-tracy-box',town:'杜加德走廊',order:1,npc:'特蕾西',type:'barter',priority:'A',verified:'USER_CONFIRMED',input:'steamedClam',inputQty:2,output:'musicBox',outputQty:1,limit:1,why:'可再到杜巴頓交換皮革，形成跨城供應鏈。'},
+  {id:'dug-tracy-box',town:'杜加德走廊',order:1,npc:'特蕾西',type:'barter',priority:'A',verified:'USER_CONFIRMED',input:'steamedClam',inputQty:2,output:'musicBox',outputQty:1,limit:1,why:'可再到杜巴頓找瓦爾特交換皮革，形成跨城供應鏈。'},
   {id:'dug-elven-wood',town:'杜加德走廊',order:2,npc:'艾爾文',type:'barter',priority:'S',verified:'USER_CONFIRMED',input:'stirVeg',inputQty:2,output:'highWood',outputQty:8,limit:2,why:'用料理快速換高級木材，節省大量加工時間。'},
 
   {id:'dun-glenna-asparagus',town:'杜巴頓',order:1,npc:'格莉娜',type:'shop',priority:'S_PLUS',verified:'USER_CONFIRMED',output:'asparagus',price:10000,limit:null,why:'鯖魚與鮭魚排等高級料理瓶頸食材；有料理目標時才買。'},
@@ -132,7 +133,8 @@ const tasks = [
   {id:'dun-manus-grit',town:'杜巴頓',order:2,npc:'馬努斯',type:'shop',priority:'S',verified:'USER_CONFIRMED',output:'gritHerb',price:400,limit:30,why:'終極技類秘藥的重要藥草。'},
   {id:'dun-manus-mimi',town:'杜巴頓',order:2,npc:'馬努斯',type:'shop',priority:'S_PLUS',verified:'USER_CONFIRMED',output:'mimiJuice',price:600,limit:30,why:'暴擊、終極、減傷、移速等基礎戰鬥秘藥共用材料。'},
   {id:'dun-manus-sprout',town:'杜巴頓',order:2,npc:'馬努斯',type:'shop',priority:'A',verified:'USER_CONFIRMED',output:'sproutJuice',price:400,limit:30,why:'多種高階藥品的加工材料。'},
-  {id:'dun-manus-life',town:'杜巴頓',order:2,npc:'馬努斯',type:'barter',priority:'S_PLUS',verified:'TW_CONFIRMED',input:'petFood',inputQty:20,output:'lifeStone',outputQty:2,limit:2,why:'生命魔力石可作高階藥品材料，也可再換其他魔力石；不要無腦全轉掉。'},
+  {id:'dun-manus-life',town:'杜巴頓',order:2,npc:'馬努斯',type:'barter',priority:'S_PLUS',verified:'TW_CONFIRMED',input:'petFood',inputQty:20,output:'lifeStone',outputQty:2,limit:2,why:'生命魔力石可作高階藥品材料，也可再到庫漢交換廢墟魔力石；不要無腦全轉掉。'},
+  {id:'dun-walter-leather',town:'杜巴頓',order:3,npc:'瓦爾特',type:'barter',priority:'A',verified:'CURRENT_REFERENCE',input:'musicBox',inputQty:1,output:'leather',outputQty:6,limit:2,plannedCount:1,why:'特蕾西原木音樂盒的後續交換；單次 1 個音樂盒可換 6 個皮革。瓦爾特每日可換 2 次，但特蕾西每日只供應 1 個，因此路線預設先安排 1 次；有庫存可再多換 1 次。'},
 
   {id:'cobh-gilian-four',town:'庫漢',order:1,npc:'基利安',type:'shop',priority:'S_PLUS',verified:'USER_CONFIRMED',output:'fourLeaf',price:750,limit:null,why:'暴擊秘藥供應鏈核心；依生產目標計算需求，不以限購量代替建議量。'},
   {id:'cobh-gilian-cleanjuice',town:'庫漢',order:1,npc:'基利安',type:'shop',priority:'S_PLUS',verified:'USER_CONFIRMED',output:'cleanJuice',price:750,limit:null,why:'高級暴擊等高階秘藥直接材料。'},
@@ -148,6 +150,7 @@ const tasks = [
   {id:'cobh-connor-beetle',town:'庫漢',order:2,npc:'康納',type:'shop',priority:'B',verified:'USER_CONFIRMED',output:'beetle',price:500,limit:30,why:'強打／減傷類秘藥與伐木定位；無相關目標時建議0。'},
   {id:'cobh-connor-firefly',town:'庫漢',order:2,npc:'康納',type:'shop',priority:'A',verified:'USER_CONFIRMED',output:'firefly',price:400,limit:30,why:'移速／連打類秘藥材料；有對應目標才升高。'},
   {id:'cobh-connor-highhide',town:'庫漢',order:2,npc:'康納',type:'shop',priority:'A',verified:'USER_CONFIRMED',output:'highHidePlus',price:600,limit:30,why:'高階皮革加工與製裝長期素材。'},
+  {id:'cobh-connor-ruin',town:'庫漢',order:2,npc:'康納',type:'barter',priority:'A',verified:'CURRENT_REFERENCE',input:'lifeStone',inputQty:5,output:'ruinStone',outputQty:5,limit:5,conditional:'production',why:'高級暴擊秘藥會用到廢墟魔力石；只有生產目標有缺口時才需要換，不建議固定把生命魔力石全換掉。'},
 
   {id:'cobh-armis-silver',town:'庫漢',order:3,npc:'阿爾米斯',type:'barter',priority:'S_PLUS',verified:'TW_CONFIRMED',input:'specialSteel',inputQty:2,output:'silverAlloy',outputQty:1,limit:1,why:'高階裝備、生活工具與符文／刻印材料的長期戰略物資。'}
 ];
