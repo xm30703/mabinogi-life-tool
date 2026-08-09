@@ -1,6 +1,11 @@
 (() => {
-  const CURRENT_VERSION = '2.5';
+  const CURRENT_VERSION = '2.6';
   const CHANGELOG = [
+    {
+      version:'2.6',
+      title:'通用登入頭像',
+      items:['右上角改成圓形頭像，不再長駐顯示 Email','Google 等 OAuth 優先顯示登入平台提供的頭像','沒有平台頭像時自動以名稱或 Email 首字母建立頭像','頭像右下角以狀態點表示已同步、同步中或離線','帳號、Email、登入平台、版本紀錄與登出仍集中在同一選單']
+    },
     {
       version:'2.5',
       title:'帳號選單與版本紀錄',
@@ -59,32 +64,62 @@
     const style = document.createElement('style');
     style.id = 'account-menu-style';
     style.textContent = `
-      .cloud-account{position:relative}
+      .cloud-account{position:relative;display:flex;align-items:center}
       #cloudStatus,#logoutBtn{display:none!important}
-      #authBtn:after{content:'⌄';margin-left:7px;color:var(--muted);font-size:.85em}
+      #authBtn.account-avatar-trigger{position:relative;width:44px;height:44px;min-width:44px;padding:0!important;border-radius:50%!important;display:grid;place-items:center;overflow:visible;background:#111820;border:1px solid var(--line);box-shadow:none}
+      #authBtn.account-avatar-trigger:hover{border-color:var(--accent)}
+      .avatar-shell{width:38px;height:38px;border-radius:50%;overflow:hidden;display:grid;place-items:center;position:relative;background:#27323d;color:var(--text);font-weight:800;font-size:1rem;line-height:1}
+      .avatar-shell.menu-avatar{width:50px;height:50px;font-size:1.15rem;flex:0 0 50px}
+      .avatar-letter{position:absolute;inset:0;display:grid;place-items:center;text-transform:uppercase}
+      .avatar-image{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+      .avatar-guest{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;color:var(--muted)}
+      .avatar-status-dot{position:absolute;right:-1px;bottom:-1px;width:12px;height:12px;border-radius:50%;border:2px solid #0d1319;background:#78838d;z-index:4}
+      .avatar-status-dot.ok{background:#46d778}.avatar-status-dot.warn{background:#f0bb4c}.avatar-status-dot.offline{background:#78838d}
       .account-menu{position:absolute;right:0;top:calc(100% + 9px);z-index:10050;width:min(410px,calc(100vw - 24px));max-height:min(72vh,650px);overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:0 18px 55px #0009;padding:10px}
       .account-menu[hidden]{display:none}
       .account-menu-section{padding:10px}.account-menu-section+.account-menu-section{border-top:1px solid var(--line)}
-      .account-menu-eyebrow{font-size:.72rem;color:var(--muted);margin-bottom:5px}.account-menu-email{font-weight:750;overflow-wrap:anywhere}.account-menu-meta{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px}.account-pill{font-size:.72rem;border:1px solid var(--line);border-radius:999px;padding:4px 8px;color:var(--muted)}.account-pill.ok{border-color:#2c6941;color:var(--accent)}.account-pill.warn{border-color:#7a6330;color:var(--warn)}
+      .account-identity{display:flex;align-items:center;gap:12px;min-width:0}.account-identity-copy{min-width:0;flex:1}
+      .account-menu-eyebrow{font-size:.72rem;color:var(--muted);margin-bottom:4px}.account-menu-name{font-weight:800;font-size:1rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.account-menu-email{font-size:.78rem;color:var(--muted);margin-top:3px;overflow-wrap:anywhere}
+      .account-menu-meta{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}.account-pill{font-size:.72rem;border:1px solid var(--line);border-radius:999px;padding:4px 8px;color:var(--muted)}.account-pill.ok{border-color:#2c6941;color:var(--accent)}.account-pill.warn{border-color:#7a6330;color:var(--warn)}
       .account-menu-actions{display:grid;gap:7px}.account-menu-action{width:100%;text-align:left;background:#10161d;color:var(--text);border:1px solid var(--line);border-radius:10px;padding:10px 11px;cursor:pointer}.account-menu-action:hover{border-color:var(--accent)}.account-menu-action.danger{color:#ffb1b1}.account-menu-action.primary{background:var(--accent);color:#0d1711;border-color:var(--accent);font-weight:750}
       .version-head{display:flex;align-items:center;justify-content:space-between;gap:10px}.version-current{font-size:.72rem;color:#0d1711;background:var(--accent);border-radius:999px;padding:4px 8px;font-weight:800}.version-list{margin-top:8px}.version-item{padding:10px 0}.version-item+.version-item{border-top:1px solid var(--line)}.version-title{display:flex;align-items:baseline;gap:8px}.version-number{font-weight:800;color:var(--accent)}.version-name{font-weight:700}.version-item ul{margin:6px 0 0;padding-left:18px;color:var(--muted);font-size:.78rem;line-height:1.55}.version-item li+li{margin-top:2px}
-      @media(max-width:780px){.account-menu{position:fixed;left:12px;right:12px;top:72px;width:auto;max-height:calc(100vh - 90px)}}
+      @media(max-width:780px){.account-menu{position:fixed;left:12px;right:12px;top:72px;width:auto;max-height:calc(100vh - 90px)}#authBtn.account-avatar-trigger{width:42px;height:42px;min-width:42px}.avatar-shell{width:36px;height:36px}}
     `;
     document.head.appendChild(style);
 
-    function loggedIn(){
-      return authBtn.textContent.trim() !== '登入 / 註冊';
+    function loggedIn(){ return authBtn.dataset.loggedIn === '1'; }
+    function providerLabel(){ return authBtn.dataset.providerLabel || '已驗證帳號'; }
+    function email(){ return authBtn.dataset.email || ''; }
+    function displayName(){ return authBtn.dataset.displayName || (email() ? email().split('@')[0] : '帳號'); }
+    function avatarUrl(){ return authBtn.dataset.avatarUrl || ''; }
+    function initial(){ return (authBtn.dataset.initial || email().charAt(0) || displayName().charAt(0) || '?').toUpperCase(); }
+
+    function syncState(text){
+      if(/已同步/.test(text)) return 'ok';
+      if(/讀取|同步中/.test(text)) return 'warn';
+      return 'offline';
     }
 
-    function providerLabel(){
-      const title = authBtn.getAttribute('title') || '';
-      return title.replace(/^登入方式：/, '') || '已驗證帳號';
+    function guestIcon(){
+      return `<svg class="avatar-guest" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4.5 21c.7-4.3 3.2-6.5 7.5-6.5s6.8 2.2 7.5 6.5"></path></svg>`;
+    }
+
+    function avatarHtml(sizeClass=''){
+      if(!loggedIn()) return `<span class="avatar-shell ${sizeClass}">${guestIcon()}</span>`;
+      const fallback = `<span class="avatar-letter">${esc(initial())}</span>`;
+      const image = avatarUrl() ? `<img class="avatar-image" src="${esc(avatarUrl())}" alt="" referrerpolicy="no-referrer">` : '';
+      return `<span class="avatar-shell ${sizeClass}">${fallback}${image}</span>`;
+    }
+
+    function bindAvatarFallback(root){
+      root.querySelectorAll('.avatar-image').forEach(img => {
+        img.addEventListener('error', () => { img.style.display='none'; }, {once:true});
+      });
     }
 
     function statusClass(text){
-      if(/已同步/.test(text)) return 'ok';
-      if(/離線|讀取|同步中/.test(text)) return 'warn';
-      return '';
+      const state = syncState(text);
+      return state === 'ok' ? 'ok' : state === 'warn' ? 'warn' : '';
     }
 
     function changelogHtml(){
@@ -95,13 +130,32 @@
         </div>`).join('');
     }
 
+    function syncTrigger(){
+      const syncText = cloudStatus?.textContent || (loggedIn() ? '已登入' : '本機模式');
+      const signature = [loggedIn(),email(),displayName(),avatarUrl(),initial(),syncText].join('|');
+      if(authBtn.dataset.avatarSignature === signature) return;
+      authBtn.dataset.avatarSignature = signature;
+      authBtn.classList.add('account-avatar-trigger');
+      authBtn.classList.remove('sync-user');
+      authBtn.setAttribute('aria-label', loggedIn() ? `帳號選單：${displayName()}` : '登入與系統資訊');
+      authBtn.setAttribute('title', loggedIn() ? displayName() : '登入 / 註冊');
+      authBtn.innerHTML = `${avatarHtml()}<span class="avatar-status-dot ${syncState(syncText)}" aria-hidden="true"></span>`;
+      bindAvatarFallback(authBtn);
+    }
+
     function renderMenu(){
       const isLoggedIn = loggedIn();
       const syncText = cloudStatus?.textContent || (isLoggedIn ? '已登入' : '本機模式');
       menu.innerHTML = `
         <div class="account-menu-section">
-          <div class="account-menu-eyebrow">${isLoggedIn ? '目前登入者' : '帳號'}</div>
-          <div class="account-menu-email">${esc(isLoggedIn ? authBtn.textContent.trim() : '尚未登入')}</div>
+          <div class="account-identity">
+            ${avatarHtml('menu-avatar')}
+            <div class="account-identity-copy">
+              <div class="account-menu-eyebrow">${isLoggedIn ? '目前登入者' : '帳號'}</div>
+              <div class="account-menu-name">${esc(isLoggedIn ? displayName() : '尚未登入')}</div>
+              ${isLoggedIn && email()?`<div class="account-menu-email">${esc(email())}</div>`:''}
+            </div>
+          </div>
           <div class="account-menu-meta">
             ${isLoggedIn ? `<span class="account-pill">${esc(providerLabel())}</span>` : '<span class="account-pill">本機模式</span>'}
             <span class="account-pill ${statusClass(syncText)}">${esc(syncText)}</span>
@@ -117,6 +171,7 @@
           <div class="version-list">${changelogHtml()}</div>
         </div>`;
 
+      bindAvatarFallback(menu);
       menu.querySelector('#menuLoginBtn')?.addEventListener('click', () => {
         menu.hidden = true;
         if(authModal) authModal.hidden = false;
@@ -127,10 +182,7 @@
       });
     }
 
-    function openMenu(){
-      renderMenu();
-      menu.hidden = false;
-    }
+    function openMenu(){ renderMenu(); menu.hidden = false; }
     function closeMenu(){ menu.hidden = true; }
 
     authBtn.addEventListener('click', e => {
@@ -145,10 +197,12 @@
     document.addEventListener('keydown', e => { if(e.key === 'Escape') closeMenu(); });
 
     const observer = new MutationObserver(() => {
+      syncTrigger();
       if(!menu.hidden) renderMenu();
     });
     observer.observe(authBtn,{childList:true,subtree:true,attributes:true});
     if(cloudStatus) observer.observe(cloudStatus,{childList:true,subtree:true,attributes:true});
+    syncTrigger();
   }
 
   if(document.readyState === 'loading'){
