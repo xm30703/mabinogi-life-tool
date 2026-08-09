@@ -139,19 +139,45 @@
     location.reload();
   }
 
+  function providerLabel(provider){
+    const labels = {google:'Google',email:'Email',facebook:'Facebook',discord:'Discord',github:'GitHub',apple:'Apple'};
+    return labels[provider] || provider || '已驗證帳號';
+  }
+
+  function userPresentation(user){
+    if(!user) return null;
+    const meta = user.user_metadata || {};
+    const identityMeta = (user.identities || []).map(i => i?.identity_data || {}).find(x => Object.keys(x).length) || {};
+    const provider = user.app_metadata?.provider || user.identities?.[0]?.provider || 'email';
+    const email = user.email || meta.email || identityMeta.email || '';
+    const avatarUrl = meta.avatar_url || meta.picture || meta.avatar || identityMeta.avatar_url || identityMeta.picture || identityMeta.avatar || '';
+    const displayName = meta.full_name || meta.name || meta.user_name || meta.preferred_username || identityMeta.full_name || identityMeta.name || identityMeta.user_name || (email ? email.split('@')[0] : '已登入');
+    const initialSource = provider === 'email' ? email : displayName;
+    const initial = String(initialSource || email || '?').trim().charAt(0).toUpperCase() || '?';
+    return {provider,email,avatarUrl,displayName,initial};
+  }
+
   function updateAccountUI(){
     const authBtn = document.querySelector('#authBtn');
     const logoutBtn = document.querySelector('#logoutBtn');
     if(!authBtn || !logoutBtn) return;
     if(currentUser){
-      const provider = currentUser.app_metadata?.provider;
-      const providerLabel = provider === 'google' ? 'Google' : provider === 'email' ? 'Email' : provider;
-      authBtn.textContent = currentUser.email || '已登入';
-      authBtn.title = providerLabel ? `登入方式：${providerLabel}` : '已登入';
+      const p = userPresentation(currentUser);
+      authBtn.dataset.loggedIn = '1';
+      authBtn.dataset.email = p.email;
+      authBtn.dataset.provider = p.provider;
+      authBtn.dataset.providerLabel = providerLabel(p.provider);
+      authBtn.dataset.displayName = p.displayName;
+      authBtn.dataset.avatarUrl = p.avatarUrl;
+      authBtn.dataset.initial = p.initial;
+      authBtn.textContent = p.email || p.displayName || '已登入';
+      authBtn.title = `登入方式：${providerLabel(p.provider)}`;
       authBtn.classList.add('sync-user');
       logoutBtn.hidden = false;
       setCloudStatus('雲端同步中', 'warn');
     } else {
+      authBtn.dataset.loggedIn = '0';
+      ['email','provider','providerLabel','displayName','avatarUrl','initial','avatarSignature'].forEach(k => delete authBtn.dataset[k]);
       authBtn.textContent = '登入 / 註冊';
       authBtn.removeAttribute('title');
       authBtn.classList.remove('sync-user');
