@@ -74,9 +74,60 @@ const $ = s=>document.querySelector(s);
 const $$ = s=>[...document.querySelectorAll(s)];
 const nameOf = id => materials[id]?.name || recipes[id]?.name || id;
 const money = n => Number(n||0).toLocaleString('zh-TW');
+const qtyText = n => Number.isInteger(Number(n)) ? String(Number(n)) : Number(n).toFixed(2).replace(/0+$/,'').replace(/\.$/,'');
 
 function vPass(){ return true; }
 function pPass(p){ return state.pf==='ALL'||state.pf===p; }
+
+function routeRank(t){
+  const townIndex=TOWN_ORDER.indexOf(t.town);
+  return (townIndex<0?999:townIndex)*100 + Number(t.order||0);
+}
+
+function barterUnit(t){
+  const exchanges = t.type==='barter' && Number(t.plannedCount||t.limit)>0 ? Number(t.plannedCount||t.limit) : 1;
+  return {
+    inputQty:Number(t.inputQty||0)/exchanges,
+    outputQty:Number(t.outputQty||0)/exchanges
+  };
+}
+
+function barterSourcesFor(id){
+  return tasks
+    .filter(t=>t.type==='barter' && t.output===id)
+    .sort((a,b)=>routeRank(a)-routeRank(b));
+}
+
+function barterUsesFor(id){
+  return tasks
+    .filter(t=>t.type==='barter' && t.input===id)
+    .sort((a,b)=>routeRank(a)-routeRank(b));
+}
+
+function acquisitionSources(id){
+  return tasks.filter(t=>t.output===id).sort((a,b)=>routeRank(a)-routeRank(b));
+}
+
+function barterChainHint(t){
+  if(t.type!=='barter') return '';
+  const upstream=barterSourcesFor(t.input).filter(x=>x.id!==t.id);
+  const downstream=barterUsesFor(t.output).filter(x=>x.id!==t.id);
+  const parts=[];
+
+  if(upstream.length){
+    const text=upstream.map(x=>`${x.town} → ${x.npc}`).join('、');
+    parts.push(`← 來源：${text}`);
+  }
+  if(downstream.length){
+    const text=downstream.map(x=>{
+      const u=barterUnit(x);
+      return `${x.town} → ${x.npc}（${nameOf(x.input)} ×${qtyText(u.inputQty)} → ${nameOf(x.output)} ×${qtyText(u.outputQty)}）`;
+    }).join('、');
+    parts.push(`→ 下一站：${text}`);
+  }
+  if(!parts.length) return '';
+  return `<div class="small" style="margin-top:7px;color:var(--accent)">${parts.join('<br>')}</div>`;
+}
 
 function computeBOM(){
   const demand={};
@@ -129,7 +180,11 @@ function badgeP(p){ return `<span class="badge p-${p}">${PRIORITY_LABEL[p]}</spa
 function filteredTasks(){
   const q=(state.q||'').trim().toLowerCase();
   return tasks.filter(t=>{
-    const hay=[t.town,t.npc,nameOf(t.input),nameOf(t.output),t.why].join(' ').toLowerCase();
+    const chain=[
+      ...barterSourcesFor(t.input).map(x=>`${x.town} ${x.npc}`),
+      ...barterUsesFor(t.output).map(x=>`${x.town} ${x.npc}`)
+    ].join(' ');
+    const hay=[t.town,t.npc,nameOf(t.input),nameOf(t.output),t.why,chain].join(' ').toLowerCase();
     return (!q||hay.includes(q)) && pPass(t.priority);
   });
 }
@@ -160,7 +215,7 @@ function renderRoute(){
   const rec=recommendations();
   const modeTitle = state.routeMode==='DAILY' ? '每日以物易物' : '每週限購商店';
   const modeHelp = state.routeMode==='DAILY'
-    ? '每天重置的 NPC 交換。建議先處理 S+/S，再看材料庫存決定 A/B。'
+    ? '每天重置的 NPC 交換。若交換品還能在後續 NPC 再換，卡片會直接標示「下一站」。'
     : '補貨週期的金幣商店。限購量不等於建議購買量，依生產目標與庫存補缺口。';
 
   const controls = `
@@ -202,12 +257,18 @@ function renderRoute(){
               if(rq>0) decision=`<b>本週建議：</b>購買 ${rq}`;
               else if(t.priority==='B' && t.output==='beetle') decision=`<b>本週建議：</b>0；若只為伐木定位，可維持庫存 1`;
               else decision=`<b>本週建議：</b>沒有生產缺口，可跳過`;
+            } else if(t.conditional==='production'){
+              const need=Number(computeBOM().base[t.output]||0);
+              decision=need>0
+                ? `<b>生產缺口：</b>${nameOf(t.output)} 尚缺 ${need}，再依手上 ${nameOf(t.input)} 數量決定交換次數`
+                : `<b>本週建議：</b>目前沒有生產缺口，可跳過`;
             }
             return `<div class="task ${st==='done'?'done':st==='skip'?'skip':''}">
               <div class="task-main">
                 <div>
                   <div class="badges">${badgeP(t.priority)}<span class="badge">${scheduleLabel(t)}</span></div>
                   <div class="line">${line}</div>
+                  ${barterChainHint(t)}
                   ${decision?`<div class="decision">${decision}</div>`:''}
                 </div>
                 <div class="actions">
@@ -245,25 +306,67 @@ function renderRoute(){
   }));
 }
 
-function renderPrep(){
-  const pending=tasks.filter(t=>t.type==='barter' && taskStatus(t)!=='done' && taskStatus(t)!=='skip');
-  const grouped={};
+function computePrepPlan(){
+  const bomBase=computeBOM().base;
+  const pending=tasks
+    .filter(t=>t.type==='barter' && taskStatus(t)!=='done' && taskStatus(t)!=='skip')
+    .filter(t=>!t.conditional || (t.conditional==='production' && Number(bomBase[t.output]||0)>0))
+    .sort((a,b)=>routeRank(a)-routeRank(b));
+
+  const external={};
+  const produced={};
+  const producedBy={};
+  const transit=[];
+
   pending.forEach(t=>{
-    grouped[t.town]??={};
-    grouped[t.town][t.input]=(grouped[t.town][t.input]||0)+t.inputQty;
+    let need=Number(t.inputQty||0);
+    const available=Number(produced[t.input]||0);
+    const fromRoute=Math.min(need,available);
+
+    if(fromRoute>0){
+      need-=fromRoute;
+      produced[t.input]=available-fromRoute;
+      const from=producedBy[t.input];
+      transit.push({
+        id:t.input,
+        qty:fromRoute,
+        from:from ? `${from.town} → ${from.npc}` : '前站交換',
+        to:`${t.town} → ${t.npc}`
+      });
+    }
+
+    if(need>0){
+      external[t.town]??={};
+      external[t.town][t.input]=(external[t.town][t.input]||0)+need;
+    }
+
+    produced[t.output]=(produced[t.output]||0)+Number(t.outputQty||0);
+    producedBy[t.output]=t;
   });
+
+  return {external,transit};
+}
+
+function renderPrep(){
+  const {external,transit}=computePrepPlan();
   $('#prep').innerHTML=`
-    <div class="notice">只列尚未完成／未跳過的交換前置物。商店購買品不重複列入。</div>
-    ${Object.entries(grouped).map(([town,items])=>`
+    <div class="notice">先列真正需要自帶的交換材料；若某個材料能在前一站交換取得，會自動扣除並列在「途中銜接」，避免把巢狀交換品重複算成出門前原料。</div>
+    ${Object.entries(external).map(([town,items])=>`
       <div class="card"><b>${town}</b><div class="sep"></div>
-        ${Object.entries(items).map(([id,q])=>`<label style="display:block;margin:8px 0"><input type="checkbox" style="width:auto;margin-right:8px">${nameOf(id)} ×${q}</label>`).join('')}
-      </div>`).join('') || '<div class="card">目前沒有待準備的交換材料。</div>'}`;
+        ${Object.entries(items).map(([id,q])=>`<label style="display:block;margin:8px 0"><input type="checkbox" style="width:auto;margin-right:8px">${nameOf(id)} ×${qtyText(q)}</label>`).join('')}
+      </div>`).join('') || '<div class="card">目前沒有需要額外自帶的交換材料。</div>'}
+    ${transit.length?`
+      <div class="card">
+        <b>途中銜接</b><div class="sep"></div>
+        ${transit.map(x=>`<div class="route-chip">${x.from} 取得 ${nameOf(x.id)} ×${qtyText(x.qty)} → 帶到 ${x.to}</div>`).join('')}
+      </div>`:''}`;
 }
 
 function renderProduction(){
   const {base,surplus}=computeBOM();
   const entries=Object.entries(base).filter(([,q])=>q>0).sort((a,b)=>b[1]-a[1]);
   const shopIds=new Set(tasks.filter(t=>t.type==='shop').map(t=>t.output));
+  const barterIds=new Set(tasks.filter(t=>t.type==='barter').map(t=>t.output));
   const shopCost=entries.reduce((sum,[id,q])=>{
     const prices=tasks.filter(t=>t.type==='shop'&&t.output===id).map(t=>t.price).filter(Boolean);
     return sum+(prices.length?Math.min(...prices)*q:0);
@@ -285,17 +388,27 @@ function renderProduction(){
           <div class="metric"><div class="label">基礎缺料</div><div class="value">${entries.length}</div></div>
           <div class="metric"><div class="label">NPC 可購缺口估值</div><div class="value">$${money(shopCost)}</div></div>
         </div>
-        <div class="small" style="margin-top:10px">高級暴擊秘藥會遞迴展開普通暴擊秘藥，再計算四葉草、咪咪蘑菇汁液等基礎需求；批次產量會納入。</div>
+        <div class="small" style="margin-top:10px">製作 BOM 會遞迴展開配方與批次產量；若基礎材料可透過每日交換取得，會另外標出 NPC 路徑。交換鏈不再被誤當成「沒有來源」的死端材料。</div>
       </div>
     </div>
     <div class="card">
       <b>缺料與庫存</b><div class="sep"></div>
-      ${entries.length?entries.map(([id,q])=>`
+      ${entries.length?entries.map(([id,q])=>{
+        const barterSources=barterSourcesFor(id);
+        const extra=[
+          shopIds.has(id)?'可由跑商商店補':'',
+          barterIds.has(id)?'可由每日交換取得':''
+        ].filter(Boolean).join('｜');
+        return `
         <div class="material-row">
-          <div><b>${nameOf(id)}</b><div class="source">${materials[id]?.source||''}${shopIds.has(id)?'｜可由跑商商店補':''}</div></div>
+          <div><b>${nameOf(id)}</b>
+            <div class="source">${materials[id]?.source||''}${extra?`｜${extra}`:''}</div>
+            ${barterSources.length?`<div class="small" style="margin-top:4px;color:var(--accent)">交換來源：${barterSources.map(t=>`${t.town} → ${t.npc}`).join('、')}</div>`:''}
+          </div>
           <div class="right">缺 <b>${q}</b></div>
           <input class="inv" data-id="${id}" type="number" min="0" value="${state.inventory[id]||0}" placeholder="庫存">
-        </div>`).join(''):'<div class="small">設定成品目標後，這裡會自動展開完整材料缺口。</div>'}
+        </div>`;
+      }).join(''):'<div class="small">設定成品目標後，這裡會自動展開製作配方與基礎材料缺口。</div>'}
       ${Object.keys(surplus).length?`<details><summary>批次製作剩餘</summary><div class="reason">${Object.entries(surplus).filter(([,q])=>q>0).map(([id,q])=>`${nameOf(id)} +${q}`).join('、')||'無'}</div></details>`:''}
     </div>`;
 
@@ -314,8 +427,13 @@ function materialUses(id){
   Object.entries(recipes).forEach(([,r])=>{
     if(r.ingredients[id]) out.push(`${r.name}：${r.ingredients[id]}/批`);
   });
+  barterUsesFor(id).forEach(t=>{
+    const u=barterUnit(t);
+    out.push(`交換｜${t.town} → ${t.npc}：${nameOf(t.input)} ×${qtyText(u.inputQty)} → ${nameOf(t.output)} ×${qtyText(u.outputQty)}`);
+  });
   return out;
 }
+
 function renderSearch(){
   const q=(state.q||'').trim().toLowerCase();
   const ids=Object.keys(materials).filter(id=>{
@@ -332,8 +450,8 @@ function renderSearch(){
         <div><b class="small">取得方式</b>
           ${src.length?src.map(t=>`<div class="route-chip">${t.town} → ${t.npc}｜${t.type==='shop'?`$${money(t.price)}`:`${nameOf(t.input)} ×${t.inputQty}`}</div>`).join(''):'<div class="small" style="margin-top:6px">目前沒有已收錄的 NPC 來源</div>'}
         </div>
-        <div><b class="small">核心用途</b>
-          ${uses.length?uses.map(x=>`<div class="route-chip">${x}</div>`).join(''):'<div class="small" style="margin-top:6px">目前核心配方未使用；沒有明確目標就不建議因「限購」而囤。</div>'}
+        <div><b class="small">核心用途／後續交換</b>
+          ${uses.length?uses.map(x=>`<div class="route-chip">${x}</div>`).join(''):'<div class="small" style="margin-top:6px">目前核心配方或已收錄交換鏈未使用；沒有明確目標就不建議因「限購」而囤。</div>'}
         </div>
       </div>
     </div>`;
