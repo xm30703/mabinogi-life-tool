@@ -1,6 +1,7 @@
 (() => {
   const SUPABASE_URL = 'https://gzsqfvbrvzfcetzjipuc.supabase.co';
   const SUPABASE_KEY = 'sb_publishable_L8_nFbp95L5cmVQ5E1uu2g_pfgzDe4E';
+  const APP_URL = 'https://xm30703.github.io/mabinogi-life-tool/';
   const STORAGE_KEY = 'mabiLifeToolState';
   const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -39,8 +40,16 @@
     modal.innerHTML = `
       <div class="auth-card">
         <button class="auth-close" id="authClose" aria-label="關閉">×</button>
-        <h3>帳號登入 / 註冊</h3>
-        <div class="small">登入後，跑商進度、庫存與生產目標會同步到雲端。</div>
+        <h3>登入你的跑商資料</h3>
+        <div class="small">登入後，跑商進度、庫存與生產目標會跨裝置同步。</div>
+
+        <button class="google-login" id="googleLoginBtn" type="button">
+          <span class="google-mark" aria-hidden="true">G</span>
+          <span>使用 Google 登入</span>
+        </button>
+
+        <div class="auth-divider"><span>或使用 Email</span></div>
+
         <label>Email<input id="authEmail" type="email" autocomplete="email" placeholder="name@example.com"></label>
         <label>密碼<input id="authPassword" type="password" autocomplete="current-password" placeholder="至少 6 個字元"></label>
         <div class="auth-actions">
@@ -55,12 +64,14 @@
     style.textContent = `
       .cloud-account{display:flex;gap:7px;align-items:center;flex-wrap:wrap}.cloud-status{font-size:.8rem;color:var(--muted)}.cloud-status.ok{color:var(--accent)}.cloud-status.warn{color:var(--warn)}
       .auth-modal{position:fixed;inset:0;background:#0009;z-index:9999;display:grid;place-items:center;padding:18px}.auth-modal[hidden]{display:none}.auth-card{width:min(420px,100%);background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px;position:relative;box-shadow:0 20px 60px #0008}.auth-card h3{margin:0 0 6px}.auth-card label{display:block;margin:14px 0 0;color:var(--muted);font-size:.86rem}.auth-card label input{margin-top:5px}.auth-actions{display:flex;gap:8px;margin-top:14px}.auth-close{position:absolute;right:12px;top:9px;border:0;background:transparent;color:var(--muted);font-size:1.7rem}.sync-user{max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+      .google-login{width:100%;margin-top:18px;display:flex;align-items:center;justify-content:center;gap:10px;border:1px solid #d7dce2;background:#fff;color:#202124;border-radius:10px;padding:10px 14px;font-weight:650}.google-login:hover{background:#f7f8f9}.google-login:disabled{opacity:.65;cursor:wait}.google-mark{display:grid;place-items:center;width:22px;height:22px;border-radius:50%;font-weight:800;font-size:1rem;background:conic-gradient(from -45deg,#4285f4 0 25%,#34a853 0 50%,#fbbc05 0 75%,#ea4335 0);color:#fff;text-shadow:0 1px 2px #0005}.auth-divider{display:flex;align-items:center;gap:10px;margin:18px 0 4px;color:var(--muted);font-size:.78rem}.auth-divider:before,.auth-divider:after{content:'';height:1px;background:var(--line);flex:1}
     `;
     document.head.appendChild(style);
 
     document.querySelector('#authBtn').onclick = () => { modal.hidden = false; };
     document.querySelector('#authClose').onclick = () => { modal.hidden = true; };
     modal.addEventListener('click', e => { if(e.target === modal) modal.hidden = true; });
+    document.querySelector('#googleLoginBtn').onclick = loginWithGoogle;
     document.querySelector('#loginBtn').onclick = login;
     document.querySelector('#signupBtn').onclick = signup;
     document.querySelector('#logoutBtn').onclick = logout;
@@ -77,6 +88,26 @@
     if(el){ el.textContent = msg; el.style.color = bad ? 'var(--danger)' : 'var(--muted)'; }
   }
 
+  async function loginWithGoogle(){
+    const btn = document.querySelector('#googleLoginBtn');
+    if(btn) btn.disabled = true;
+    authMessage('正在前往 Google 登入…');
+    const {error} = await client.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: APP_URL,
+        queryParams: {
+          access_type: 'online',
+          prompt: 'select_account'
+        }
+      }
+    });
+    if(error){
+      if(btn) btn.disabled = false;
+      authMessage(`Google 登入失敗：${error.message}`, true);
+    }
+  }
+
   async function login(){
     const {email,password} = authValues();
     if(!email || !password) return authMessage('請輸入 Email 與密碼。', true);
@@ -90,7 +121,7 @@
     const {email,password} = authValues();
     if(!email || password.length < 6) return authMessage('請輸入有效 Email，密碼至少 6 個字元。', true);
     authMessage('建立帳號中…');
-    const {data,error} = await client.auth.signUp({email,password});
+    const {data,error} = await client.auth.signUp({email,password, options:{emailRedirectTo:APP_URL}});
     if(error) return authMessage(error.message, true);
     if(data.session){
       authMessage('帳號建立完成。');
@@ -113,12 +144,16 @@
     const logoutBtn = document.querySelector('#logoutBtn');
     if(!authBtn || !logoutBtn) return;
     if(currentUser){
+      const provider = currentUser.app_metadata?.provider;
+      const providerLabel = provider === 'google' ? 'Google' : provider === 'email' ? 'Email' : provider;
       authBtn.textContent = currentUser.email || '已登入';
+      authBtn.title = providerLabel ? `登入方式：${providerLabel}` : '已登入';
       authBtn.classList.add('sync-user');
       logoutBtn.hidden = false;
       setCloudStatus('雲端同步中', 'warn');
     } else {
       authBtn.textContent = '登入 / 註冊';
+      authBtn.removeAttribute('title');
       authBtn.classList.remove('sync-user');
       logoutBtn.hidden = true;
       setCloudStatus('本機模式');
@@ -192,6 +227,8 @@
     currentUser = session?.user || null;
     updateAccountUI();
     if(currentUser){
+      const modal = document.querySelector('#authModal');
+      if(modal) modal.hidden = true;
       await reconcile();
       startWatcher();
     }else{
